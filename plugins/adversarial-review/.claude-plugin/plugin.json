@@ -1,0 +1,11 @@
+{
+  "name": "adversarial-review",
+  "description": "Adversarial reasoning and decision stress-testing. Pressure-test arguments, run pre-mortems, play devil's advocate, and generate structured Decision Records.",
+  "version": "1.0.0",
+  "author": {
+    "name": "jukben"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jukben/claude-skills",
+  "keywords": ["adversarial", "review", "decision-record", "ADR", "devil's-advocate", "pre-mortem"]
+}

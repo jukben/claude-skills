@@ -1,0 +1,21 @@
+{
+  "name": "jukben-skills",
+  "owner": {
+    "name": "jukben"
+  },
+  "metadata": {
+    "description": "A collection of Claude Code skills by jukben",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "adversarial-review",
+      "source": "./plugins/adversarial-review",
+      "description": "Adversarial reasoning and decision stress-testing. Pressure-test arguments, run pre-mortems, play devil's advocate, and generate structured Decision Records.",
+      "version": "1.0.0",
+      "license": "MIT",
+      "keywords": ["adversarial", "review", "decision-record", "ADR", "devil's-advocate", "pre-mortem"]
+    }
+  ]
+}
