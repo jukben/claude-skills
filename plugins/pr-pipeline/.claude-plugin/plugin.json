@@ -1,0 +1,11 @@
+{
+  "name": "pr-pipeline",
+  "description": "PR lifecycle skills: self-review with parallel agents, publish as draft PR, and babysit through merge with CI monitoring and review thread resolution",
+  "version": "1.0.0",
+  "author": {
+    "name": "jukben"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jukben/claude-skills",
+  "keywords": ["pr", "pull-request", "code-review", "ci", "merge", "babysit"]
+}

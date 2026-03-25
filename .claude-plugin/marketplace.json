@@ -16,6 +16,14 @@
       "version": "1.0.0",
       "license": "MIT",
       "keywords": ["adversarial", "review", "decision-record", "ADR", "devil's-advocate", "pre-mortem"]
+    },
+    {
+      "name": "pr-pipeline",
+      "source": "./plugins/pr-pipeline",
+      "description": "PR lifecycle skills: self-review with parallel agents, publish as draft PR, and babysit through merge with CI monitoring and review thread resolution.",
+      "version": "1.0.0",
+      "license": "MIT",
+      "keywords": ["pr", "pull-request", "code-review", "ci", "merge", "babysit"]
     }
   ]
 }
