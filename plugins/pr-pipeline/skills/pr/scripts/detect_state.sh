@@ -36,6 +36,33 @@ elif git rev-parse --verify "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
   DIFF_BASE="origin/$DEFAULT_BRANCH"
 fi
 
+# ─── Ticket detection (generic Linear/Jira-style pattern) ───
+#
+# Matches uppercase 2-10 letter prefix + dash + digits (e.g. ABC-123, JIRA-4567).
+# Falls back to lowercase pattern after a path separator (e.g. `username/abc-123`)
+# for projects that follow Linear's lowercase branch convention.
+# Final result is normalized to uppercase.
+
+BRANCH_FOR_TICKET="$BRANCH"
+TICKET=""
+if [[ "$BRANCH_FOR_TICKET" =~ ([A-Z]{2,10})-([0-9]+) ]]; then
+  TICKET="${BASH_REMATCH[0]}"
+elif [[ "$BRANCH_FOR_TICKET" =~ (^|/)([a-z]{2,10})-([0-9]+) ]]; then
+  TICKET="${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
+fi
+if [ -z "$TICKET" ]; then
+  TICKET=$(git log --oneline -5 HEAD 2>/dev/null | grep -oE '[A-Z]{2,10}-[0-9]+' | head -1 || true)
+fi
+TICKET=$(echo "$TICKET" | tr '[:lower:]' '[:upper:]')
+
+BRANCH_HAS_TICKET=false
+if [ -n "$TICKET" ]; then
+  TICKET_LOWER=$(echo "$TICKET" | tr '[:upper:]' '[:lower:]')
+  if echo "$BRANCH" | grep -qi "$TICKET_LOWER"; then
+    BRANCH_HAS_TICKET=true
+  fi
+fi
+
 # ─── Diff stats (git — always available, even without a PR) ───
 
 DIFF_JSON='{"commits":0,"additions":0,"deletions":0,"files_changed":0,"changed_files":[]}'
@@ -130,6 +157,8 @@ jq -n \
   --arg diff_base "$DIFF_BASE" \
   --arg repo_name "$REPO_NAME" \
   --arg repo_owner "$REPO_OWNER" \
+  --arg ticket "$TICKET" \
+  --argjson branch_has_ticket "$BRANCH_HAS_TICKET" \
   --argjson diff "$DIFF_JSON" \
   --argjson pr "$PR_SECTION" \
   --argjson ci "$CHECKS_SECTION" \
@@ -140,6 +169,7 @@ jq -n \
     branch: $branch,
     diff_base: $diff_base,
     diff: $diff,
+    ticket: {id: $ticket, branch_has_ticket: $branch_has_ticket},
     pr: $pr,
     ci: $ci,
     workspace: {has_claude_md: $has_claude_md, has_uncommitted: $has_uncommitted}
