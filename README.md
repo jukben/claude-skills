@@ -30,19 +30,19 @@ Adversarial reasoning and decision stress-testing. Pressure-test arguments, run 
 - Quick mode (single pass) or Full Debate mode (multi-round)
 - Generates structured Decision Records ready for team sharing
 
-### pr-pipeline
+### pr-pipeline (v2.0.0)
 
 PR lifecycle from branch to merge. Two skills that work together:
 
-- **`/pr-pipeline:pr`** — Detects branch state, runs self-review (`/simplify` + parallel code review & test agents), publishes as draft PR, and hands off to babysit
+- **`/pr-pipeline:pr`** — Detects branch state, classifies changes into XS/S/M/L tiers, runs tier-aware parallel self-review, publishes as draft PR, and hands off to babysit
 - **`/pr-pipeline:babysit-pr`** — Monitors CI, fixes failures, rebases, resolves review threads (human vs bot), enables automerge, loops until merged
 
 **Features:**
-- Auto-detects branch/PR state and routes to the right flow
-- Self-review with `/simplify` + 2 parallel agents (code review, test & CI)
-- Quality gate before publishing
-- Smart review thread resolution (human comments get individual attention, bot comments triaged in batch)
-- Continuous monitoring via `/loop`
+- Deterministic XS/S/M/L tier classifier with Haiku sanity-check
+- Parallel agents scaled to tier: code review, PR shape, test/CI, security (L only), requirements (when ticket detected)
+- Haiku confidence scoring filters false positives before they reach you
+- Breaking-API gate before publish; optional ticket-prefixed title for Linear/Jira-style workflows
+- Smart review thread resolution (human comments individual, bot comments batched) and continuous monitoring via `/loop`
 
 ## License
 
