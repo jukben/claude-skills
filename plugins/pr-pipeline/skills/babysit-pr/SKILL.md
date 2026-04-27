@@ -5,7 +5,7 @@ description: >
   resolve review conversations, mark ready for review, enable automerge, and
   keep checking until merged. Use when the user says "babysit", "watch my PR",
   "monitor CI", "shepherd this to merge", or after publishing a PR via /pr.
-allowed-tools: Bash(gh:*), Bash(git:*), Skill(loop)
+allowed-tools: Bash(gh:*), Bash(git:*), Skill(loop), Monitor
 ---
 
 # Babysit PR
@@ -14,22 +14,22 @@ Actively shepherd a PR to merge. Fix problems, resolve conversations, keep watch
 
 ## Phase 1: Gather State
 
-Two scripts in `scripts/` handle data gathering. Resolve `SKILL_DIR` to the absolute path of the `babysit-pr` skill directory once at the start. Both scripts accept a PR number or URL; if omitted they auto-detect from the current branch.
+Two scripts in `scripts/` handle data gathering. Both accept a PR number or URL; if omitted they auto-detect from the current branch.
 
 Run in parallel — don't suppress stderr (errors are diagnostic):
 
 ```bash
-bash "$SKILL_DIR/scripts/fetch_pr_state.sh" $PR_NUMBER
+bash "${CLAUDE_SKILL_DIR}/scripts/fetch_pr_state.sh" $PR_NUMBER
 ```
 
 ```bash
-bash "$SKILL_DIR/scripts/fetch_review_threads.sh" $PR_NUMBER
+bash "${CLAUDE_SKILL_DIR}/scripts/fetch_review_threads.sh" $PR_NUMBER
 ```
 
 **`fetch_pr_state.sh`** → `{ pr, checks, fetchedMain }`
 - `pr`: number, title, url, head/base, isDraft, mergeable, mergeStateStatus, reviewDecision, autoMergeRequest
 - `checks`: total/passed/failed/pending/skipped counts + `details[]` (name, status, elapsed, url)
-- `fetchedMain`: whether `git fetch origin main` succeeded
+- `fetchedMain`: whether the default branch fetch succeeded
 
 **`fetch_review_threads.sh`** → `{ pr, threads, summary }`
 - `summary`: total/resolved/unresolved/unresolved_human/unresolved_bot/outdated
@@ -49,7 +49,7 @@ If `isDraft` is true: wait until CI is green and no conflicts, then ask "CI is g
 
 If `checks.failed > 0`:
 
-1. Get failure details from the check URLs in the state JSON, or use `gh run view` to inspect logs
+1. Get failure details from the check URLs in the state JSON, or use `gh run view` to inspect logs. If a CI-provider MCP server is configured (CircleCI, GitHub Actions, etc.), prefer it for richer failure context.
 2. Propose concrete fixes (file + line)
 3. Ask before applying
 4. Commit, push — CI re-runs
@@ -58,8 +58,8 @@ If `checks.failed > 0`:
 
 If `mergeable` is `CONFLICTING`:
 
-1. Show conflicting files: `git diff --name-only HEAD...origin/main`
-2. Rebase: `git rebase origin/main`
+1. Show conflicting files: `git diff --name-only HEAD...origin/<base>` (use the PR's `base` from state JSON)
+2. Rebase: `git rebase origin/<base>`
 3. Resolve if straightforward, otherwise ask
 4. Ask before force-pushing
 
@@ -131,7 +131,41 @@ After resolving conversations, reassess:
 
 A PR is merge-ready when: CI green, no conflicts, conversations resolved, review approved, automerge enabled. Until then, keep watching.
 
-Set up monitoring via `/loop`:
+### Start the monitor
+
+A persistent polling script watches CI checks, PR metadata, and review threads every 30 seconds. It emits one-line events **only when state changes**, keeping notifications quiet until something actually happens.
+
+```
+Monitor({
+  command: "bash \"${CLAUDE_SKILL_DIR}/scripts/monitor_pr.sh\" $PR_NUMBER 30",
+  description: "PR #<number> status",
+  persistent: true
+})
+```
+
+The script emits events in this format:
+
+| Event | Meaning | Action |
+|-------|---------|--------|
+| `CI: ... — all green` | All checks pass | Check if merge-ready |
+| `CI: ... — FAILED: name1, name2` | CI failure | Re-enter Phase 2b |
+| `Conflicts: MERGEABLE -> CONFLICTING` | New conflicts | Re-enter Phase 2c |
+| `Review: ... -> APPROVED` | Review approved | Check if merge-ready |
+| `Threads: X->Y unresolved (H human, B bot)` | Review thread changes | Re-enter Phase 2e if increased |
+| `Automerge: enabled/disabled` | Automerge toggled | Re-enter Phase 2d if disabled |
+| `Draft: marked ready` | No longer a draft | Note — continue monitoring |
+| `Merged` | PR merged | Report success and stop |
+| `Closed` | PR closed | Report and stop |
+
+### React to events
+
+When a monitor notification arrives indicating a problem, re-enter the relevant Phase 2 step. Do not re-run both fetch scripts — the monitor event tells you exactly what changed.
+
+After fixing an issue (CI failure, conflict, review thread), the monitor will detect the new state on its next poll cycle and emit an updated event.
+
+### Loop fallback
+
+If the Monitor tool is not available, fall back to the polling loop. The loop re-fetches everything each cycle rather than tracking incremental state — simpler and more robust, at the cost of slightly more work per iteration.
 
 ```
 /loop 5m /babysit-pr
@@ -147,13 +181,17 @@ Each iteration re-runs both scripts from Phase 1 and checks all conditions:
 | Review approved        | `reviewDecision == "APPROVED"`         | Note — can't force this     |
 | Automerge enabled      | `autoMergeRequest == true`             | Re-enter Phase 2d           |
 
-When all conditions are met and automerge is enabled → report "All checks are green and automerge is enabled. GitHub will merge automatically once branch protection requirements are satisfied — nothing left for us to do." Then stop the loop.
+### Completion
 
-Do NOT report the PR as merged at this point. Automerge means GitHub will handle it, but the merge hasn't happened yet. The PR is still open until GitHub processes it.
+When all conditions are met and automerge is enabled → report "All checks are green and automerge is enabled. GitHub will merge automatically once branch protection requirements are satisfied — nothing left for us to do." Then stop the monitor (or loop).
+
+Do NOT report the PR as merged at this point. Automerge means GitHub will handle it, but the merge hasn't happened yet. The PR is still open until GitHub processes it. The monitor will emit a `Merged` event when GitHub completes the merge.
 
 If the user doesn't want continuous monitoring, present the final status and exit.
 
 ## Report Format
+
+This format enables quick scanning of PR health — status table first for at-a-glance assessment, then conversations requiring attention, then actions taken. Consistent structure means the user can skim the same positions each time.
 
 ```
 ## PR #<number> — <title>
@@ -179,6 +217,18 @@ If the user doesn't want continuous monitoring, present the final status and exi
 ## Remaining
 <what still needs attention>
 ```
+
+## Example
+
+PR #142 is a draft, CI has one failing check, and a reviewer left 3 comments:
+> "babysit this"
+
+1. Fetch state → draft, 1 CI failure, 3 unresolved threads (2 human, 1 bot)
+2. Fix CI: read failure logs, apply missing import fix, push → CI re-runs
+3. Wait for CI green, then ask to mark ready → `gh pr ready`
+4. Resolve threads: human comment about null check → code change; human question about naming → draft reply for approval; bot style nit → resolve without action
+5. Enable automerge → `gh pr merge --auto --squash`
+6. Monitor until GitHub merges
 
 ## Guidelines
 

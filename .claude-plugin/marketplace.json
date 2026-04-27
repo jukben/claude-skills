@@ -20,10 +20,10 @@
     {
       "name": "pr-pipeline",
       "source": "./plugins/pr-pipeline",
-      "description": "PR lifecycle skills: tier-aware self-review with parallel agents (code review, PR shape, test/CI, security, requirements), confidence scoring to filter false positives, draft PR with optional ticket prefix, and babysit through merge with CI monitoring and review thread resolution.",
-      "version": "2.0.0",
+      "description": "PR lifecycle skills: tier-aware self-review with parallel agents (code review, PR shape, test/CI, security, requirements), confidence scoring to filter false positives, draft PR with optional ticket prefix, and babysit through merge with persistent state-diffing monitor (event-driven, quiet until something changes) and smart review thread resolution.",
+      "version": "2.1.0",
       "license": "MIT",
-      "keywords": ["pr", "pull-request", "code-review", "ci", "merge", "babysit", "self-review", "confidence-scoring"]
+      "keywords": ["pr", "pull-request", "code-review", "ci", "merge", "babysit", "self-review", "confidence-scoring", "monitor"]
     }
   ]
 }
